@@ -1,0 +1,101 @@
+---
+title: "Practical Machine Learning Final Project"
+author: "Jimin Oh"
+date: "6/4/2017"
+output: html_document
+---
+
+## Project description
+
+In this project, I will use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants, who were asked to perform barbell lifts correctly and incorrectly in 5 different ways. The goal of the project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set. I may use any of the other variables to predict with.  
+
+## report description
+
+In this report, I will create a report describing 1) how I built your model, 2) how I used cross validation, 3) what I think the expected out of sample error is, and 4) why you made the choices you did. I will also 5) use prediction model to predict 20 different test cases.
+
+## data processing 
+First, load the package that we need for the analysis
+```{r, echo=FALSE}
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(RColorBrewer)
+library(rattle)
+library(randomForest)
+library(knitr)
+```
+
+then, I will read the raw data: training and testing. 
+```{r, echo=TRUE}
+training <- read.csv('./pml-training.csv',na.strings=c("NA","#DIV/0!",""), header = T)
+testing <- read.csv('./pml-testing.csv',na.strings=c("NA","#DIV/0!",""), header=T)
+```
+The training dataset has 19622 observation and 160 variables. The testing dataset has 20 observation and 160 variables. I will build the model based on the outcome of the variable classe in the training set first and then use the model to predict it to testing set.
+
+As there are many variables with NA values, which I think it will not be useful for the analsis, I will reduce the dataset by deleting the predictor with NA. 
+```{r, echo=TRUE}
+proportionNAs <- colMeans(is.na(training))
+proportionNAstest <-colMeans(is.na(testing))
+NoNA <- !proportionNAs
+NoNAtest <- !proportionNAstest
+#remove these variables with NAs
+trainingnonas <- training[NoNA]
+testingnonas <- testing[NoNAtest]
+ncol(trainingnonas)
+ncol(testingnonas)
+```
+Also, I will get rid of the variables X, user_name, raw_timestamp_part1, raw_timestamp_part2, dvtd_timestamp, new_window, num_window as it is not relavant for our reseatch question.
+```{r, echo=TRUE}
+traindata <- trainingnonas[, -c(1:7)]
+testdata <- testingnonas[, -c(1:7)]
+```
+The cleaned dataset is traindata and testdata. I will use these data sets for the final anlysis.
+
+## data spliting
+I will split the cleaned training set into a training set (train, 70%) for prediction and a validation set (valid, 30%) in order to cross validate.
+```{r,echo=TRUE}
+set.seed(13721) 
+inTrain <- createDataPartition(traindata$classe, p = 0.7, list = FALSE)
+train <- traindata[inTrain, ]
+valid <- traindata[-inTrain, ]
+```
+## Model building
+1. Decision Tree
+```{r, echo=TRUE}
+modfitrpart <- rpart(classe ~ ., data=train, method="class")
+fancyRpartPlot(modfitrpart)
+#predict on valid data set
+predictrpart <- predict(modfitrpart, valid, type="class")
+confusionmatrix1 <- confusionMatrix(predictrpart, valid$classe)
+confusionmatrix1
+```
+the accuracy for decision tree model, it was 0.76, which out-of sample error rate(valid sample) is 0.34.
+
+2. generalized boosted regression
+I will set the k-fold(k=5) cross validation for the iteration time efficiency.
+```{r, echo=FALSE}
+control <- trainControl(method = "cv", number=5)
+modfitboosting <- train(classe ~ .,data=train, method="gbm", trControl = control)
+# predict on valid data set
+predictrboosting <- predict(modfitboosting, valid)
+confusionmatrix2 <- confusionMatrix(predictrboosting, valid$classe)
+confusionmatrix2
+```
+the accuracy for generalized boosted regression model, it was 0.958, which out-of sample error rate(valid sample) is 0.042.
+
+3. random forest model
+```{r, echo=True}
+modfitrf <- randomForest(classe ~.,data=train,method = "class")
+#prediction on valid data set 
+predictrf <- predict(modfitrf, valid, type="class")
+confusionmatrix3 <- confusionMatrix(predictrf, valid$classe)
+confusionmatrix3
+```
+the accuracy for random forest rate was 0.9942, which means training data sets' out of sample(valid sample) error rate was 0.0058. Therefore, the random forest model yields the most accurate prediction model in terms of the training dataset validation.   
+
+## Use prediction model for test data set. 
+I will use the Random forest model to predict the outcome variable classe in the testing dataset.
+```{r, echo=TRUE}
+predict(modfitrf, testdata, type="class")
+```
+The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har.
